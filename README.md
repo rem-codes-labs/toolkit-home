@@ -9,8 +9,8 @@ npm run dev
 ```
 
 ## Internet Identity
-- `src/auth/internetIdentity.ts` contains a placeholder sign-in routine.
-- Replace with `@dfinity/auth-client` and configure your IC canister IDs.
+- `src/auth/internetIdentity.ts` uses `@dfinity/auth-client` to sign in.
+- Configure your IC canister IDs and identity provider as needed.
 
 ## Device models
 - `src/models/devices.ts` includes lights (RGB optional), switches, locks, and thermostats.

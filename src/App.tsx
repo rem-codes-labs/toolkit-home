@@ -5,6 +5,7 @@ import {
   Card,
   CardContent,
   CardHeader,
+  Chip,
   Container,
   Divider,
   Drawer,
@@ -12,6 +13,9 @@ import {
   IconButton,
   Link,
   Stack,
+  Step,
+  StepLabel,
+  Stepper,
   Toolbar,
   Typography,
 } from "@mui/material";
@@ -21,7 +25,7 @@ import { Link as RouterLink, Route, Routes } from "react-router-dom";
 import { devices, scenes } from "./data/devices";
 import { mockCloud } from "./api/mockCloud";
 import { homeKitStatus } from "./integrations/homekit";
-import { signInWithInternetIdentity } from "./auth/internetIdentity";
+import { useInternetIdentity } from "./auth/useInternetIdentity";
 
 const navItems = [
   { label: "Dashboard", to: "/" },
@@ -31,8 +35,11 @@ const navItems = [
   { label: "Security", to: "/security" },
 ];
 
+const onboardingSteps = ["Connect device", "Name", "Assign room", "Done"];
+
 function Layout({ children }: { children: React.ReactNode }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const { isAuthenticated, principal, login, logout, loading } = useInternetIdentity();
 
   const drawer = useMemo(
     () => (
@@ -63,13 +70,27 @@ function Layout({ children }: { children: React.ReactNode }) {
               </Link>
             ))}
           </Stack>
-          <IconButton
-            aria-label="open navigation"
-            onClick={() => setDrawerOpen(true)}
-            sx={{ display: { xs: "inline-flex", md: "none" } }}
-          >
-            <MenuIcon />
-          </IconButton>
+          <Stack direction="row" spacing={1} alignItems="center">
+            {!loading && isAuthenticated && principal && (
+              <Chip label={`Principal: ${principal.slice(0, 10)}…`} />
+            )}
+            {!loading && isAuthenticated ? (
+              <Button variant="outlined" onClick={logout}>
+                Sign out
+              </Button>
+            ) : (
+              <Button variant="contained" onClick={login}>
+                Sign in
+              </Button>
+            )}
+            <IconButton
+              aria-label="open navigation"
+              onClick={() => setDrawerOpen(true)}
+              sx={{ display: { xs: "inline-flex", md: "none" } }}
+            >
+              <MenuIcon />
+            </IconButton>
+          </Stack>
         </Toolbar>
       </AppBar>
       <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
@@ -103,26 +124,39 @@ function Layout({ children }: { children: React.ReactNode }) {
 }
 
 function DashboardPage() {
+  const { isAuthenticated, principal, login, error, loading } = useInternetIdentity();
+
   return (
     <Container maxWidth="lg" sx={{ py: { xs: 6, md: 10 } }}>
       <Stack spacing={5}>
         <Box>
           <Typography variant="h1" gutterBottom>
-            Toolkit Home
+            Dashboard
           </Typography>
           <Typography variant="body1" sx={{ maxWidth: 700 }}>
-            A secure, device-first control panel for lights, switches, locks, and thermostats. Built
-            for Internet Identity authentication and future HomeKit pairing.
+            Control lights, switches, locks, and thermostats with Internet Identity sign-in and
+            future HomeKit pairing.
           </Typography>
-          <Button
-            variant="contained"
-            sx={{ mt: 3 }}
-            onClick={() => {
-              signInWithInternetIdentity();
-            }}
-          >
-            Sign in with Internet Identity
-          </Button>
+          {!loading && !isAuthenticated && (
+            <Stack spacing={1} sx={{ mt: 3 }}>
+              <Button variant="contained" onClick={login}>
+                Sign in with Internet Identity
+              </Button>
+              <Typography variant="caption" color="text.secondary">
+                No password required. Uses DFINITY Internet Identity.
+              </Typography>
+              {error && (
+                <Typography variant="caption" color="error" role="alert" aria-live="polite">
+                  {error}
+                </Typography>
+              )}
+            </Stack>
+          )}
+          {!loading && isAuthenticated && principal && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+              Signed in as {principal}
+            </Typography>
+          )}
         </Box>
         <Grid container spacing={3}>
           <Grid item xs={12} md={4}>
@@ -159,6 +193,19 @@ function DashboardPage() {
             </Card>
           </Grid>
         </Grid>
+        <Card sx={{ p: 3 }}>
+          <Stack direction={{ xs: "column", md: "row" }} spacing={3} alignItems="center">
+            <Box sx={{ flex: 1 }}>
+              <Typography variant="h2">Add device</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Launch the phone-first onboarding flow to pair a new device.
+              </Typography>
+            </Box>
+            <Button variant="contained" component={RouterLink} to="/onboarding">
+              Start onboarding
+            </Button>
+          </Stack>
+        </Card>
       </Stack>
     </Container>
   );
@@ -171,12 +218,16 @@ function DevicesPage() {
         <Typography variant="h2">Devices</Typography>
         <Grid container spacing={3}>
           {devices.map((device) => (
-            <Grid item xs={12} md={6} key={device.id}>
+            <Grid item xs={12} md={4} key={device.id}>
               <Card sx={{ height: "100%" }}>
-                <CardHeader title={device.name} subheader={`${device.room} · ${device.type}`} />
+                <CardHeader
+                  title={device.name}
+                  subheader={`${device.room} · ${device.type}`}
+                  action={<Chip label={device.online ? "Online" : "Offline"} color="primary" />}
+                />
                 <CardContent>
                   <Typography variant="body2" color="text.secondary">
-                    Firmware {device.firmware} · {device.online ? "Online" : "Offline"}
+                    Firmware {device.firmware}
                   </Typography>
                   <Box sx={{ mt: 2 }}>
                     {device.type === "light" && (
@@ -199,15 +250,17 @@ function DevicesPage() {
                       </Typography>
                     )}
                   </Box>
-                  <Button
-                    variant="outlined"
-                    sx={{ mt: 2 }}
-                    onClick={() =>
-                      mockCloud.setDeviceState({ deviceId: device.id, type: device.type, payload: {} })
-                    }
-                  >
-                    Send control command
-                  </Button>
+                  <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
+                    <Button
+                      variant="outlined"
+                      onClick={() =>
+                        mockCloud.setDeviceState({ deviceId: device.id, type: device.type, payload: {} })
+                      }
+                    >
+                      Toggle
+                    </Button>
+                    <Button variant="text">Details</Button>
+                  </Stack>
                 </CardContent>
               </Card>
             </Grid>
@@ -225,7 +278,7 @@ function ScenesPage() {
         <Typography variant="h2">Scenes</Typography>
         <Grid container spacing={3}>
           {scenes.map((scene) => (
-            <Grid item xs={12} md={6} key={scene.id}>
+            <Grid item xs={12} md={4} key={scene.id}>
               <Card>
                 <CardHeader title={scene.name} subheader={scene.description} />
                 <CardContent>
@@ -253,15 +306,22 @@ function OnboardingPage() {
   return (
     <Container maxWidth="md" sx={{ py: { xs: 6, md: 10 } }}>
       <Stack spacing={3}>
-        <Typography variant="h2">Mobile onboarding flow</Typography>
+        <Typography variant="h2">Mobile onboarding</Typography>
         <Typography variant="body1">
           Pair new devices with a phone-first flow using the toolkit:// protocol. The app sends
           metadata and certificates, then the cloud provisions the device record.
         </Typography>
         <Card>
           <CardContent>
-            <Stack spacing={2}>
-              <Typography variant="h3">Step 1 — Scan or tap</Typography>
+            <Stepper activeStep={1} alternativeLabel>
+              {onboardingSteps.map((label) => (
+                <Step key={label}>
+                  <StepLabel>{label}</StepLabel>
+                </Step>
+              ))}
+            </Stepper>
+            <Stack spacing={2} sx={{ mt: 3 }}>
+              <Typography variant="h3">Step 1 — Connect device</Typography>
               <Typography variant="body2">
                 Scan the QR code on the device or tap the NFC tag. This opens:
               </Typography>
@@ -271,13 +331,9 @@ function OnboardingPage() {
               >
                 toolkit://pair?device_id=LOCK-3921&room=Entry
               </Box>
-              <Typography variant="h3">Step 2 — Secure handshake</Typography>
               <Typography variant="body2">
-                Phone signs the request with Internet Identity session keys and forwards to cloud.
-              </Typography>
-              <Typography variant="h3">Step 3 — Assign room + owner</Typography>
-              <Typography variant="body2">
-                Choose room, name, and default scene. Device appears in the dashboard instantly.
+                Assign the room and choose a default scene. Unsupported devices can be added
+                manually.
               </Typography>
             </Stack>
           </CardContent>
